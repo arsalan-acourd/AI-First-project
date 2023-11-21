@@ -19,7 +19,6 @@ class ReflexAgent(Agent):
         chosenIndex = random.choice(bestIndices)  # Pick randomly among the best
 
         "Add more of your code here if you want to"
-        # print(legalMoves[chosenIndex])
 
         return legalMoves[chosenIndex]
 
@@ -41,11 +40,58 @@ def scoreEvaluationFunction(currentGameState: GameState):
 
 
 class MultiAgentSearchAgent(Agent):
-    def __init__(self, evalFn='betterEvaluationFunction', depth='2'):
+    def __init__(self, evalFn='betterEvaluationFunction', depth='3'):
         self.index = 0
         self.evaluationFunction = better
         self.depth = int(depth)
         self.BEST_ACTION = None
+
+
+class AlphabetaAgent(MultiAgentSearchAgent):
+    def getAction(self, state):
+        def minimax(state, depth, agent, alpha, beta):
+            if state.isWin() or state.isLose() or depth == self.depth:
+                return self.evaluationFunction(state)
+            if agent == 0:
+                max_value = float("-inf")
+                actions = state.getLegalActions(agent)
+                for action in actions:
+                    successor = state.generateSuccessor(agent, action)
+                    eval = minimax(successor, depth, agent + 1, alpha, beta)
+                    max_value = max(max_value, eval)
+                    alpha = max(max_value, alpha)
+                    if beta <= alpha:
+                        break
+                return max_value
+            else:
+                next_agent = agent + 1
+                if next_agent == state.getNumAgents():
+                    next_agent = 0
+                    depth += 1
+                min_value = float("inf")
+                actions = state.getLegalActions(agent)
+                for action in actions:
+                    successor = state.generateSuccessor(agent, action)
+                    eval = minimax(successor, depth, next_agent, alpha, beta)
+                    min_value = min(min_value, eval)
+                    beta = min(min_value, beta)
+                    if beta <= alpha:
+                        break
+                return min_value
+        actions = state.getLegalActions(0)
+        move = Directions.STOP
+        value2 = float("-inf")
+        for action in actions:
+            compare = minimax(state.generateSuccessor(0, action), 0, 1, float("-inf"), float("inf"))
+            if compare > value2:
+                value2 = compare
+                move = action
+        return move
+
+
+
+
+
 
 
 class MinimaxAgent(MultiAgentSearchAgent):
@@ -138,6 +184,7 @@ def nearest_food_distance(state):
         temp_position = queue.pop()
         x, y = temp_position[0]
 
+
         if state.hasFood(x, y):
             return temp_position[1]
 
@@ -160,14 +207,17 @@ def nearest_food_distance(state):
 
 
 
-def nearest_scared_ghost(ghoststate, state):
+def nearest_scared_ghost(state):
     state.getNumAgents()
+    ghost_states = state.getGhostStates()
+    ghost_pos = [x.getPosition() for x in ghost_states]
     walls = state.getWalls()
     row, col = 0, 0
     for i in walls:
         for j in walls[0]:
             col += 1
         row += 1
+
     def is_in_bounds(i, j):
         if 0 < i < row and 0 < j < col:
             return True
@@ -182,14 +232,29 @@ def nearest_scared_ghost(ghoststate, state):
         temp_position = queue.pop()
         x, y = temp_position[0]
 
-    if ghoststate == (x, y):
-        return temp_position[1]
 
+        if (x , y) in ghost_pos:
+            return temp_position[1]
 
+        if temp_position[0] in visited:
+            continue
 
+        if temp_position[1] > 4:
+            return 3
 
+        visited.add(temp_position[0])
 
+        x, y = temp_position[0]
+        if not walls[x - 1][y] and is_in_bounds(x - 1, y):
+            queue.push([(x - 1, y), temp_position[1] + 1])
+        if not walls[x + 1][y] and is_in_bounds(x + 1, y):
+            queue.push([(x + 1, y), temp_position[1] + 1])
+        if not walls[x][y - 1] and is_in_bounds(x, y - 1):
+            queue.push([(x, y - 1), temp_position[1] + 1])
+        if not walls[x][y + 1] and is_in_bounds(x, y + 1):
+            queue.push([(x, y + 1), temp_position[1] + 1])
 
+    return float('inf')
 
 
 
@@ -211,6 +276,8 @@ def better_evaluation_function(currentGameState: GameState, ghostState=None):
     score -= 100 * food_remain
 
     score += 10 / nearest_food_distance(currentGameState)
+    if nearest_scared_ghost(currentGameState) < 3:
+        score -= 20
 
     for ghost in ghost_states:
         d = util.manhattanDistance(ghost.getPosition(), pac_pos)
